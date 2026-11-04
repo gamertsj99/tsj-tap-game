@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TSJ Admin — Withdraw Requests</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0b1220;color:#e5f6ff;margin:0;padding:16px}
+h1{font-size:20px} .card{background:#12203a;border:1px solid #1e3a5f;border-radius:12px;padding:12px;margin:12px 0}
+button{background:#00e5ff;border:0;border-radius:8px;padding:8px 14px;margin-right:8px;font-weight:700;cursor:pointer}
+button.reject{background:#ff7a7a} small{color:#9db8cc}
+table{width:100%;border-collapse:collapse} td,th{border-bottom:1px solid #1e3a5f;padding:6px;text-align:left;font-size:14px}
+</style></head><body>
+<h1>TSJ Admin — Withdraw Requests</h1>
+<p><small>Owner only. Open this page inside Telegram (via the bot) so your Telegram identity can be verified. You pay approved requests manually via Binance — nothing is paid automatically.</small></p>
+<button id="loadBtn">Load requests</button>
+<div id="stats" class="card" style="display:none"></div>
+<div id="out"></div>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+var API='https://tsj-server.gamertsj99.workers.dev';
+var tg=window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;
+if(tg)tg.expand();
+function call(path,body){return fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json();});}
+document.getElementById('loadBtn').onclick=function(){
+  var initData=tg&&tg.initData?tg.initData:'';
+  if(!initData){document.getElementById('out').innerHTML='<p>Open this page inside Telegram — no Telegram identity found.</p>';return;}
+  call('/api/admin/stats',{initData:initData}).then(function(res){
+    if(!res.ok){return;}
+    var s=res.stats;
+    var el=document.getElementById('stats');
+    el.style.display='block';
+    el.innerHTML='<h2 style="margin:0 0 8px">Bot stats</h2>'
+      +'<p>Total joined: <b>'+s.totalUsers+'</b> &nbsp;·&nbsp; Active last 24h: <b>'+s.active24h+'</b> &nbsp;·&nbsp; Active last 7 days: <b>'+s.active7d+'</b></p>'
+      +'<p>Premium users: <b>'+s.premiumUsers+'</b> &nbsp;·&nbsp; Total coins held: <b>'+s.totalBalance.toLocaleString('en-US')+'</b></p>'
+      +'<p>Withdraw requests: <b>'+s.totalWithdrawals+'</b> total, <b>'+s.pendingWithdrawals+'</b> pending, <b>'+s.approvedWithdrawals+'</b> approved</p>'
+      +'<small>“Joined” means players who opened TSJ inside Telegram and synced with the server. Players who only opened it outside Telegram are not counted.</small>';
+  }).catch(function(){});
+  call('/api/admin/list',{initData:initData}).then(function(res){
+    if(!res.ok){document.getElementById('out').innerHTML='<p>Access denied or server error: '+(res.error||'unknown')+'</p>';return;}
+    if(!res.withdrawals.length){document.getElementById('out').innerHTML='<p>No withdraw requests yet.</p>';return;}
+    var html='<table><tr><th>ID</th><th>Telegram ID</th><th>Binance ID</th><th>Amount</th><th>Fee</th><th>Net $</th><th>Status</th><th></th></tr>';
+    res.withdrawals.forEach(function(w){
+      html+='<tr><td>'+w.id+'</td><td>'+w.user_id+'</td><td>'+w.binance_id+'</td><td>'+w.amount_coins+'</td><td>'+w.fee_coins+'</td><td>$'+w.net_usd+'</td><td>'+w.status+'</td><td>';
+      if(w.status==='pending'){html+='<button onclick="decide('+w.id+',\'approve\')">Approve</button><button class="reject" onclick="decide('+w.id+',\'reject\')">Reject</button>';}
+      html+='</td></tr>';
+    });
+    document.getElementById('out').innerHTML=html+'</table>';
+  }).catch(function(){document.getElementById('out').innerHTML='<p>Server unavailable.</p>';});
+};
+function decide(id,decision){
+  var initData=tg&&tg.initData?tg.initData:'';
+  call('/api/admin/decide',{initData:initData,id:id,decision:decision}).then(function(){document.getElementById('loadBtn').click();});
+}
+</script></body></html>
